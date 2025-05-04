@@ -13,23 +13,16 @@ void ApplyTheme(Window* win, W32DMode mode) {
   window_menubar_check_radio(win, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_DARK, mode);
 }
 
-LRESULT CALLBACK StatusBarProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
   Window* win = (Window*)dwRefData;
+  if (!win) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 
-  if (win) {
+  if (hWnd == win->StatusBar.hWnd) {
     if (uMsg == WM_LBUTTONDOWN) {
       WindowStatusBarPart* part = window_statusbar_get_active(win, lParam);
       if (part) MessageBox(win->hWnd, part->text, "Clicked StatusBar Item", 0);
     }
-  }
-
-  return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-}
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-  Window* win = (Window*)dwRefData;
-
-  if (win) {
+  } else {
     if (uMsg == WM_COMMAND) {
       switch (LOWORD(wParam)) {
         case IDM_FILE_EXIT: {
@@ -63,7 +56,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
   window_set_proc(&win, WndProc);
 
   window_statusbar_init(&win);
-  window_statusbar_set_proc(&win, StatusBarProc);
+  window_statusbar_set_proc(&win, WndProc);
   window_statusbar_add_item(&win, IDS_LEFT, "Left (Fill)", -1);
   window_statusbar_add_item(&win, IDS_ONE, "One (100)", 100);
   window_statusbar_add_item(&win, IDS_TWO, "Two (200)", 200);
