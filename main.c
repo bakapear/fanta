@@ -76,7 +76,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   window_menubar_add_menu(&win, IDM_TOOLS, "&Tools", 0);
   window_menubar_add_item(&win, IDM_TOOLS_DIALOG, "&Open Dialog", IDM_TOOLS);
-  window_menubar_add_menu(&win, IDM_TOOLS_THEME, "&Tools", IDM_TOOLS);
+  window_menubar_add_menu(&win, IDM_TOOLS_THEME, "&Theme", IDM_TOOLS);
   window_menubar_add_item(&win, IDM_TOOLS_THEME_DEFAULT, "&Use System Default", IDM_TOOLS_THEME);
   window_menubar_add_item(&win, IDM_TOOLS_THEME_LIGHT, "&Light Theme", IDM_TOOLS_THEME);
   window_menubar_add_item(&win, IDM_TOOLS_THEME_DARK, "&Dark Theme", IDM_TOOLS_THEME);
