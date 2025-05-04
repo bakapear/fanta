@@ -304,8 +304,8 @@ void w32d_dark_contextmenu(BOOL enable) {
   typedef int(__stdcall * SetPreferredAppModeFn)(int);
   typedef void(__stdcall * FlushMenuThemesFn)(void);
 
-  static SetPreferredAppModeFn SetPreferredAppMode = NULL;
-  static FlushMenuThemesFn FlushMenuThemes = NULL;
+  static SetPreferredAppModeFn SetPreferredAppMode;
+  static FlushMenuThemesFn FlushMenuThemes;
 
   if (!SetPreferredAppMode || !FlushMenuThemes) {
     HMODULE hUxTheme = LoadLibrary("uxtheme.dll");
