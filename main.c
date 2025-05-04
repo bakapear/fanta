@@ -1,147 +1,89 @@
 // gcc main.c -mwindows -lgdi32 -lcomctl32 -luxtheme -o main
 
-#include <windows.h>
-//
-#include <commctrl.h>
-
 #include "w32d.h"
+#include "window.h"
 
-HINSTANCE g_hInst;
-HWND g_hStatus;
+enum StatusBarID { IDS_LEFT = 2001, IDS_ONE, IDS_TWO, IDS_THREE };
+enum MenuBarID { IDM_FILE = 3001, IDM_FILE_EXIT, IDM_TOOLS, IDM_TOOLS_DIALOG, IDM_TOOLS_THEME, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_LIGHT, IDM_TOOLS_THEME_DARK };
 
-#define IDM_FILE_EXIT 1001
+void ApplyTheme(Window* win, W32DMode mode) {
+  w32d_set_theme(win->hWnd, mode);
 
-#define IDM_TOOLS_THEME_DEFAULT 1002
-#define IDM_TOOLS_THEME_LIGHT 1003
-#define IDM_TOOLS_THEME_DARK 1004
-
-HMENU hThemeMenu;
-
-int CurrentTheme = IDM_TOOLS_THEME_DEFAULT;
-
-void ApplyTheme(HWND hWnd, int theme) {
-  CurrentTheme = theme;
-  if (CurrentTheme == IDM_TOOLS_THEME_LIGHT) {
-    w32d_set_theme(hWnd, W32D_DISABLE);
-  } else if (CurrentTheme == IDM_TOOLS_THEME_DARK) {
-    w32d_set_theme(hWnd, W32D_ENABLE);
-  } else if (CurrentTheme == IDM_TOOLS_THEME_DEFAULT) {
-    w32d_set_theme(hWnd, W32D_DEFAULT);
-  }
+  mode = (int[]){2, 3, 1}[mode];
+  window_menubar_check_radio(win, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_DARK, mode);
 }
 
-void CreateMenus(HWND hWnd) {
-  HMENU hMenu = CreateMenu();
+LRESULT CALLBACK StatusBarProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+  Window* win = (Window*)dwRefData;
 
-  HMENU hFileMenu = CreatePopupMenu();
-  AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "&File");
-  AppendMenu(hFileMenu, MF_STRING, IDM_FILE_EXIT, "&Exit");
-
-  HMENU hToolsMenu = CreatePopupMenu();
-  AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hToolsMenu, "&Tools");
-
-  hThemeMenu = CreatePopupMenu();
-  AppendMenu(hToolsMenu, MF_POPUP, (UINT_PTR)hThemeMenu, "&Theme");
-  AppendMenu(hThemeMenu, MF_STRING, IDM_TOOLS_THEME_DEFAULT, "&Use System Default");
-  AppendMenu(hThemeMenu, MF_STRING, IDM_TOOLS_THEME_LIGHT, "&Light Theme");
-  AppendMenu(hThemeMenu, MF_STRING, IDM_TOOLS_THEME_DARK, "&Dark Theme");
-  CheckMenuRadioItem(hThemeMenu, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_DARK, CurrentTheme, MF_BYCOMMAND);
-
-  SetMenu(hWnd, hMenu);
-}
-
-void HandleMenus(HWND hWnd, WPARAM wParam) {
-  switch (LOWORD(wParam)) {
-    case IDM_FILE_EXIT: {
-      PostMessage(hWnd, WM_CLOSE, 0, 0);
-      break;
-    }
-    case IDM_TOOLS_THEME_DEFAULT:
-    case IDM_TOOLS_THEME_LIGHT:
-    case IDM_TOOLS_THEME_DARK: {
-      CheckMenuRadioItem(hThemeMenu, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_DARK, wParam, MF_BYCOMMAND);
-      ApplyTheme(hWnd, wParam);
-      break;
+  if (win) {
+    if (uMsg == WM_LBUTTONDOWN) {
+      WindowStatusBarPart* part = window_statusbar_get_active(win, lParam);
+      if (part) MessageBox(win->hWnd, part->text, "Clicked StatusBar Item", 0);
     }
   }
+
+  return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
-void CreateStatusBar(HWND hWnd) {
-  INITCOMMONCONTROLSEX icex;
-  icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-  icex.dwICC = ICC_BAR_CLASSES;
-  InitCommonControlsEx(&icex);
+LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+  Window* win = (Window*)dwRefData;
 
-  g_hStatus = CreateWindowEx(0, STATUSCLASSNAME, 0, WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP, 0, 0, 0, 0, hWnd, (HMENU)1, g_hInst, 0);
-}
-
-void HandleStatusBar(HWND hWnd) {
-  static int partWidths[] = {100, 200, 100};
-
-  RECT rc;
-  GetClientRect(hWnd, &rc);
-  int partEdges[ARRAYSIZE(partWidths)];
-  for (int i = ARRAYSIZE(partEdges); i >= 0; --i) partEdges[i] = (rc.right -= partWidths[i]);
-
-  SendMessage(g_hStatus, WM_SIZE, 0, 0);
-
-  SendMessage(g_hStatus, SB_SETPARTS, ARRAYSIZE(partEdges) + 1, (LPARAM)partEdges);
-
-  SendMessage(g_hStatus, SB_SETTEXT, 0, (LPARAM) "Left (Fill)");
-  SendMessage(g_hStatus, SB_SETTEXT, 1, (LPARAM) "One (100)");
-  SendMessage(g_hStatus, SB_SETTEXT, 2, (LPARAM) "Two (200)");
-  SendMessage(g_hStatus, SB_SETTEXT, 3, (LPARAM) "Three (100)");
-}
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  switch (msg) {
-    case WM_CREATE: {
-      CreateMenus(hWnd);
-      CreateStatusBar(hWnd);
-      break;
-    }
-    case WM_PAINT: {
-      PAINTSTRUCT ps;
-      HDC hdc = BeginPaint(hWnd, &ps);
-      FillRect(hdc, &ps.rcPaint, (HBRUSH)CreateSolidBrush(RGB(0, 132, 44)));
-      EndPaint(hWnd, &ps);
-      break;
-    }
-    case WM_COMMAND: {
-      HandleMenus(hWnd, wParam);
-      break;
-    }
-    case WM_SIZE: {
-      HandleStatusBar(hWnd);
-      break;
-    }
-    case WM_DESTROY: {
-      PostQuitMessage(0);
-      break;
+  if (win) {
+    if (uMsg == WM_COMMAND) {
+      switch (LOWORD(wParam)) {
+        case IDM_FILE_EXIT: {
+          PostMessage(hWnd, WM_CLOSE, 0, 0);
+          break;
+        }
+        case IDM_TOOLS_DIALOG: {
+          MessageBox(hWnd, "Hello World!", "Info Message", MB_ICONINFORMATION);
+          break;
+        }
+        case IDM_TOOLS_THEME_DEFAULT:
+        case IDM_TOOLS_THEME_LIGHT:
+        case IDM_TOOLS_THEME_DARK: {
+          int mode = (int[]){2, 0, 1}[wParam - IDM_TOOLS_THEME_DEFAULT];
+          ApplyTheme(win, mode);
+          break;
+        }
+      }
     }
   }
-  return DefWindowProc(hWnd, msg, wParam, lParam);
+
+  return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-  g_hInst = hInstance;
+  Window win;
+  window_init(&win, hInstance, "fanta window", 640, 480);
+  if (!win.hWnd) return 0;
 
-  WNDCLASS wc = {0};
-  wc.lpfnWndProc = WndProc;
-  wc.hInstance = hInstance;
-  wc.lpszClassName = "win32dark";
-  wc.hCursor = LoadCursor(0, IDC_ARROW);
-  if (!RegisterClass(&wc)) return 0;
+  window_set_background(&win, (HBRUSH)CreateSolidBrush(RGB(132, 34, 34)));
+  window_set_proc(&win, WndProc);
 
-  HWND hWnd = CreateWindow(wc.lpszClassName, "win32dark", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 640, 480, 0, 0, hInstance, 0);
-  if (!hWnd) return 0;
+  window_statusbar_init(&win);
+  window_statusbar_set_proc(&win, StatusBarProc);
+  window_statusbar_add_item(&win, IDS_LEFT, "Left (Fill)", -1);
+  window_statusbar_add_item(&win, IDS_ONE, "One (100)", 100);
+  window_statusbar_add_item(&win, IDS_TWO, "Two (200)", 200);
+  window_statusbar_add_item(&win, IDS_THREE, "Three (100)", 100);
 
-  ShowWindow(hWnd, nCmdShow);
-  UpdateWindow(hWnd);
+  window_menubar_init(&win);
 
-  ApplyTheme(hWnd, CurrentTheme);
+  window_menubar_add_menu(&win, IDM_FILE, "&File", 0);
+  window_menubar_add_item(&win, IDM_FILE_EXIT, "&Exit", IDM_FILE);
 
-  MSG msg;
-  while (GetMessage(&msg, 0, 0, 0)) TranslateMessage(&msg), DispatchMessage(&msg);
-  return (int)msg.wParam;
+  window_menubar_add_menu(&win, IDM_TOOLS, "&Tools", 0);
+  window_menubar_add_item(&win, IDM_TOOLS_DIALOG, "&Open Dialog", IDM_TOOLS);
+  window_menubar_add_menu(&win, IDM_TOOLS_THEME, "&Tools", IDM_TOOLS);
+  window_menubar_add_item(&win, IDM_TOOLS_THEME_DEFAULT, "&Use System Default", IDM_TOOLS_THEME);
+  window_menubar_add_item(&win, IDM_TOOLS_THEME_LIGHT, "&Light Theme", IDM_TOOLS_THEME);
+  window_menubar_add_item(&win, IDM_TOOLS_THEME_DARK, "&Dark Theme", IDM_TOOLS_THEME);
+
+  ApplyTheme(&win, W32D_DEFAULT);
+
+  window_show(&win, nCmdShow);
+
+  return window_global_msg_loop();
 }
