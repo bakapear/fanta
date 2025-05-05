@@ -4,7 +4,8 @@
 #include "webbrowser.h"
 #include "window.h"
 
-WebBrowser2 web;
+Window g_Win;
+WebBrowser2 g_Web;
 
 enum StatusBarID { IDS_LEFT = 2001, IDS_ONE, IDS_TWO, IDS_THREE };
 enum MenuBarID { IDM_FILE = 3001, IDM_FILE_EXIT, IDM_TOOLS, IDM_TOOLS_DIALOG, IDM_TOOLS_THEME, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_LIGHT, IDM_TOOLS_THEME_DARK };
@@ -17,13 +18,10 @@ void ApplyTheme(Window* win, W32DMode mode) {
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-  Window* win = (Window*)dwRefData;
-  if (!win) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-
-  if (hWnd == win->StatusBar.hWnd) {
+  if (hWnd == g_Win.StatusBar.hWnd) {
     if (uMsg == WM_LBUTTONDOWN) {
-      WindowStatusBarPart* part = window_statusbar_get_active(win, lParam);
-      if (part) MessageBox(win->hWnd, part->text, "Clicked StatusBar Item", 0);
+      WindowStatusBarPart* part = window_statusbar_get_active(&g_Win, lParam);
+      if (part) MessageBox(g_Win.hWnd, part->text, "Clicked StatusBar Item", 0);
     }
   } else {
     switch (uMsg) {
@@ -41,7 +39,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UIN
           case IDM_TOOLS_THEME_LIGHT:
           case IDM_TOOLS_THEME_DARK: {
             int mode = (int[]){2, 0, 1}[wParam - IDM_TOOLS_THEME_DEFAULT];
-            ApplyTheme(win, mode);
+            ApplyTheme(&g_Win, mode);
             break;
           }
         }
@@ -49,9 +47,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UIN
       }
       case WM_SIZE: {
         RECT rc;
-        GetClientRect(win->hWnd, &rc);
+        GetClientRect(g_Win.hWnd, &rc);
         rc.bottom -= 22;
-        webbrowser_resize(&web, rc);
+        webbrowser_resize(&g_Web, rc);
         break;
       }
     }
@@ -61,38 +59,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UIN
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-  Window win;
-  window_init(&win, hInstance, "fanta window", 640, 480);
-  if (!win.hWnd) return 0;
+  window_init(&g_Win, hInstance, "fanta window", 640, 480);
+  if (!g_Win.hWnd) return 0;
 
-  window_set_background(&win, (HBRUSH)CreateSolidBrush(RGB(132, 34, 34)));
-  window_set_proc(&win, WndProc);
+  window_set_background(&g_Win, (HBRUSH)CreateSolidBrush(RGB(132, 34, 34)));
+  window_set_proc(&g_Win, WndProc);
 
-  window_statusbar_init(&win);
-  window_statusbar_set_proc(&win, WndProc);
-  window_statusbar_add_item(&win, IDS_LEFT, "Left (Fill)", -1);
-  window_statusbar_add_item(&win, IDS_ONE, "One (100)", 100);
-  window_statusbar_add_item(&win, IDS_TWO, "Two (200)", 200);
-  window_statusbar_add_item(&win, IDS_THREE, "Three (100)", 100);
+  window_statusbar_init(&g_Win);
+  window_statusbar_set_proc(&g_Win, WndProc);
+  window_statusbar_add_item(&g_Win, IDS_LEFT, "Left (Fill)", -1);
+  window_statusbar_add_item(&g_Win, IDS_ONE, "One (100)", 100);
+  window_statusbar_add_item(&g_Win, IDS_TWO, "Two (200)", 200);
+  window_statusbar_add_item(&g_Win, IDS_THREE, "Three (100)", 100);
 
-  window_menubar_init(&win);
+  window_menubar_init(&g_Win);
 
-  window_menubar_add_menu(&win, IDM_FILE, "&File", 0);
-  window_menubar_add_item(&win, IDM_FILE_EXIT, "&Exit", IDM_FILE);
+  window_menubar_add_menu(&g_Win, IDM_FILE, "&File", 0);
+  window_menubar_add_item(&g_Win, IDM_FILE_EXIT, "&Exit", IDM_FILE);
 
-  window_menubar_add_menu(&win, IDM_TOOLS, "&Tools", 0);
-  window_menubar_add_item(&win, IDM_TOOLS_DIALOG, "&Open Dialog", IDM_TOOLS);
-  window_menubar_add_menu(&win, IDM_TOOLS_THEME, "&Theme", IDM_TOOLS);
-  window_menubar_add_item(&win, IDM_TOOLS_THEME_DEFAULT, "&Use System Default", IDM_TOOLS_THEME);
-  window_menubar_add_item(&win, IDM_TOOLS_THEME_LIGHT, "&Light Theme", IDM_TOOLS_THEME);
-  window_menubar_add_item(&win, IDM_TOOLS_THEME_DARK, "&Dark Theme", IDM_TOOLS_THEME);
+  window_menubar_add_menu(&g_Win, IDM_TOOLS, "&Tools", 0);
+  window_menubar_add_item(&g_Win, IDM_TOOLS_DIALOG, "&Open Dialog", IDM_TOOLS);
+  window_menubar_add_menu(&g_Win, IDM_TOOLS_THEME, "&Theme", IDM_TOOLS);
+  window_menubar_add_item(&g_Win, IDM_TOOLS_THEME_DEFAULT, "&Use System Default", IDM_TOOLS_THEME);
+  window_menubar_add_item(&g_Win, IDM_TOOLS_THEME_LIGHT, "&Light Theme", IDM_TOOLS_THEME);
+  window_menubar_add_item(&g_Win, IDM_TOOLS_THEME_DARK, "&Dark Theme", IDM_TOOLS_THEME);
 
-  ApplyTheme(&win, W32D_DEFAULT);
+  ApplyTheme(&g_Win, W32D_DEFAULT);
 
-  webbrowser_init(&web, win.hWnd);
-  webbrowser_navigate(&web, L"https://example.com");
+  webbrowser_init(&g_Web, g_Win.hWnd);
+  webbrowser_navigate(&g_Web, L"https://example.com");
 
-  window_show(&win, nCmdShow);
+  window_show(&g_Win, nCmdShow);
 
   return window_global_msg_loop();
 }
