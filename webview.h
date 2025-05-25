@@ -24,7 +24,7 @@ typedef struct {
 static HRESULT STDMETHODCALLTYPE Controller_QueryInterface(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler* this, REFIID riid, void** ppvObject) {
   if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler)) {
     *ppvObject = this;
-    this->lpVtbl->AddRef((IUnknown*)this);
+    this->lpVtbl->AddRef(this);
     return S_OK;
   }
   *ppvObject = NULL;
@@ -68,7 +68,7 @@ typedef struct {
 static HRESULT STDMETHODCALLTYPE Env_QueryInterface(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* this, REFIID riid, void** ppvObject) {
   if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)) {
     *ppvObject = this;
-    this->lpVtbl->AddRef((IUnknown*)this);
+    this->lpVtbl->AddRef(this);
     return S_OK;
   }
   *ppvObject = NULL;
