@@ -106,9 +106,18 @@ typedef struct {
   SIZE_T sizeOfData;
 } WINDOWCOMPOSITIONATTRIBDATA;
 
-WINUSERAPI BOOL WINAPI SetWindowCompositionAttribute(HWND hWnd, WINDOWCOMPOSITIONATTRIBDATA *);
-
 void w32d_dark_titlebar(HWND hWnd, BOOL enable) {
+  typedef BOOL(WINAPI * SetWindowCompositionAttributeFn)(HWND, void *);
+
+  static SetWindowCompositionAttributeFn SetWindowCompositionAttribute = NULL;
+
+  if (!SetWindowCompositionAttribute) {
+    HMODULE hUser32 = GetModuleHandle("user32.dll");
+    if (!hUser32) return;
+
+    SetWindowCompositionAttribute = (SetWindowCompositionAttributeFn)GetProcAddress(hUser32, "SetWindowCompositionAttribute");
+  }
+
   WINDOWCOMPOSITIONATTRIBDATA data = {WCA_USEDARKMODECOLORS, &enable, sizeof(enable)};
   SetWindowCompositionAttribute(hWnd, &data);
 }
@@ -313,13 +322,11 @@ void w32d_dark_contextmenu(BOOL enable) {
 
   if (!SetPreferredAppMode || !FlushMenuThemes) {
     HMODULE hUxTheme = LoadLibrary("uxtheme.dll");
-    if (hUxTheme) {
-      SetPreferredAppMode = (SetPreferredAppModeFn)GetProcAddress(hUxTheme, (LPCSTR)135);
-      FlushMenuThemes = (FlushMenuThemesFn)GetProcAddress(hUxTheme, (LPCSTR)136);
-      FreeLibrary(hUxTheme);
-    } else {
-      return;
-    }
+    if (!hUxTheme) return;
+
+    SetPreferredAppMode = (SetPreferredAppModeFn)GetProcAddress(hUxTheme, (LPCSTR)135);
+    FlushMenuThemes = (FlushMenuThemesFn)GetProcAddress(hUxTheme, (LPCSTR)136);
+    FreeLibrary(hUxTheme);
   }
 
   SetPreferredAppMode(enable ? APPMODE_FORCE_DARK : APPMODE_DEFAULT);

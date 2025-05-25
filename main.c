@@ -1,11 +1,9 @@
-// gcc main.c -o main -lgdi32 -lcomctl32 -luxtheme -luuid -lole32 -loleaut32
-
 #include "w32d.h"
-#include "webbrowser.h"
+#include "webview.h"
 #include "window.h"
 
 Window g_Win;
-WebBrowser2 g_Web;
+WebView2 g_Web;
 
 enum StatusBarID { IDS_LEFT = 2001, IDS_ONE, IDS_TWO, IDS_THREE };
 enum MenuBarID { IDM_FILE = 3001, IDM_FILE_EXIT, IDM_TOOLS, IDM_TOOLS_DIALOG, IDM_TOOLS_THEME, IDM_TOOLS_THEME_DEFAULT, IDM_TOOLS_THEME_LIGHT, IDM_TOOLS_THEME_DARK };
@@ -49,7 +47,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UIN
         RECT rc;
         GetClientRect(g_Win.hWnd, &rc);
         rc.bottom -= 22;
-        webbrowser_resize(&g_Web, rc);
+        webview2_resize(&g_Web, rc);
+        break;
+      }
+      case WM_WEBVIEW2_READY: {
+        webview2_navigate(&g_Web, L"https://example.com");
         break;
       }
     }
@@ -86,10 +88,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   ApplyTheme(&g_Win, W32D_DEFAULT);
 
-  webbrowser_init(&g_Web, g_Win.hWnd);
-  webbrowser_navigate(&g_Web, L"https://example.com");
-
   window_show(&g_Win, nCmdShow);
+
+  webview2_init(&g_Web, g_Win.hWnd, "--disable-gpu");
 
   return window_global_msg_loop();
 }
