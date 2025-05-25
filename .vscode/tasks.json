@@ -17,7 +17,7 @@
             "group": "build",
             "label": "Build Project",
             "type": "shell",
-            "command": "(if not exist build mkdir build) && cl /Fo:build/ /Fe:build/main.exe main.c webview/WebView2LoaderStatic.lib user32.lib gdi32.lib ole32.lib oleaut32.lib comctl32.lib uxtheme.lib uuid.lib advapi32.lib /DWEBVIEW2_STATIC /link /SUBSYSTEM:WINDOWS && del /q build\\*.obj",
+            "command": "(if not exist build mkdir build) && cl /Fo:build/ /Fe:build/fanta.exe fanta.c webview/WebView2LoaderStatic.lib user32.lib gdi32.lib ole32.lib oleaut32.lib comctl32.lib uxtheme.lib uuid.lib advapi32.lib /DWEBVIEW2_STATIC /link /SUBSYSTEM:WINDOWS && del /q build\\*.obj",
             "problemMatcher": []
         }
     ]
