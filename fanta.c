@@ -51,7 +51,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UIN
         break;
       }
       case WM_WEBVIEW2_READY: {
-        webview2_navigate(&g_Web, L"https://example.com");
+        webview2_navigate(&g_Web, L"file://app/index.html");
         break;
       }
     }

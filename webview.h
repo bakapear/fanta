@@ -4,14 +4,18 @@
 #define WM_WEBVIEW2_READY (WM_USER + 100)
 
 #define COBJMACROS
-#include <stdlib.h>
 #include <windows.h>
+//
+#include <shlwapi.h>
+#include <stdlib.h>
+#include <wchar.h>
 
 #include "webview/WebView2.h"
 
 typedef struct {
   ICoreWebView2Controller* controller;
   ICoreWebView2* webview;
+  ICoreWebView2Environment* env;
 } WebView2;
 
 typedef struct {
@@ -20,6 +24,120 @@ typedef struct {
   HWND hwnd;
   WebView2* web;
 } ControllerHandler;
+
+typedef struct {
+  ICoreWebView2WebResourceRequestedEventHandlerVtbl* lpVtbl;
+  ULONG refCount;
+  HWND hwnd;
+  WebView2* web;
+  ICoreWebView2Environment* env;
+} WebResourceRequestedHandler;
+
+HRESULT LoadResourceStreamFromAppAssets(LPCWSTR path, IStream** stream) {
+  WCHAR pathQuoted[256];
+  swprintf_s(pathQuoted, 256, L"\"%s\"", path);
+
+  HRSRC hrsrc = FindResourceW(NULL, pathQuoted, RT_HTML);
+  if (!hrsrc) return HRESULT_FROM_WIN32(GetLastError());
+
+  HGLOBAL hglob = LoadResource(NULL, hrsrc);
+  if (!hglob) return HRESULT_FROM_WIN32(GetLastError());
+
+  void* data = LockResource(hglob);
+  DWORD size = SizeofResource(NULL, hrsrc);
+  if (!data || size == 0) return E_FAIL;
+
+  *stream = SHCreateMemStream((const BYTE*)data, size);
+  return (*stream != NULL) ? S_OK : E_FAIL;
+}
+
+static HRESULT STDMETHODCALLTYPE WebResourceRequested_QueryInterface(ICoreWebView2WebResourceRequestedEventHandler* this, REFIID riid, void** ppvObject) {
+  if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_ICoreWebView2WebResourceRequestedEventHandler)) {
+    *ppvObject = this;
+    this->lpVtbl->AddRef(this);
+    return S_OK;
+  }
+  *ppvObject = NULL;
+  return E_NOINTERFACE;
+}
+
+static ULONG STDMETHODCALLTYPE WebResourceRequested_AddRef(ICoreWebView2WebResourceRequestedEventHandler* this) { return ++((WebResourceRequestedHandler*)this)->refCount; }
+
+static ULONG STDMETHODCALLTYPE WebResourceRequested_Release(ICoreWebView2WebResourceRequestedEventHandler* this) {
+  WebResourceRequestedHandler* self = (WebResourceRequestedHandler*)this;
+  ULONG ref = --self->refCount;
+  if (ref == 0) {
+    if (self->env) {
+      self->env->lpVtbl->Release(self->env);
+    }
+    free(self);
+  }
+  return ref;
+}
+
+static LPCWSTR GetMimeType(LPCWSTR path) {
+  LPCWSTR ext = PathFindExtensionW(path);
+  if (_wcsicmp(ext, L".js") == 0) return L"text/javascript";
+  if (_wcsicmp(ext, L".css") == 0) return L"text/css";
+  if (_wcsicmp(ext, L".html") == 0 || _wcsicmp(ext, L".htm") == 0) return L"text/html";
+  if (_wcsicmp(ext, L".json") == 0) return L"application/json";
+  if (_wcsicmp(ext, L".png") == 0) return L"image/png";
+  if (_wcsicmp(ext, L".jpg") == 0 || _wcsicmp(ext, L".jpeg") == 0) return L"image/jpeg";
+  if (_wcsicmp(ext, L".svg") == 0) return L"image/svg+xml";
+  return L"application/octet-stream";
+}
+
+static HRESULT STDMETHODCALLTYPE WebResourceRequested_Invoke(ICoreWebView2WebResourceRequestedEventHandler* this, ICoreWebView2* sender, ICoreWebView2WebResourceRequestedEventArgs* args) {
+  WebResourceRequestedHandler* self = (WebResourceRequestedHandler*)this;
+  ICoreWebView2WebResourceRequest* request = NULL;
+  args->lpVtbl->get_Request(args, &request);
+
+  LPWSTR uri = NULL;
+  request->lpVtbl->get_Uri(request, &uri);
+
+  if (uri && wcsncmp(uri, L"file://app/", 11) == 0) {
+    LPCWSTR path = uri + 11;
+
+    IStream* stream = NULL;
+    HRESULT hr = LoadResourceStreamFromAppAssets(path, &stream);
+
+    WCHAR header[128];
+
+    if (SUCCEEDED(hr) && stream) {
+      LPCWSTR mimeType = GetMimeType(path);
+      swprintf_s(header, 128, L"Content-Type: %s\r\n", mimeType);
+
+      ICoreWebView2WebResourceResponse* response = NULL;
+      hr = self->env->lpVtbl->CreateWebResourceResponse(self->env, stream, 200, L"OK", header, &response);
+
+      if (SUCCEEDED(hr)) {
+        args->lpVtbl->put_Response(args, response);
+        response->lpVtbl->Release(response);
+      }
+
+      stream->lpVtbl->Release(stream);
+    } else {
+      IStream* emptyStream = SHCreateMemStream(NULL, 0);
+      if (emptyStream) {
+        swprintf_s(header, 128, L"Content-Type: text/plain\r\n");
+
+        ICoreWebView2WebResourceResponse* response = NULL;
+        hr = self->env->lpVtbl->CreateWebResourceResponse(self->env, emptyStream, 404, L"Not Found", header, &response);
+
+        if (SUCCEEDED(hr)) {
+          args->lpVtbl->put_Response(args, response);
+          response->lpVtbl->Release(response);
+        }
+
+        emptyStream->lpVtbl->Release(emptyStream);
+      }
+    }
+  }
+
+  if (uri) CoTaskMemFree(uri);
+  if (request) request->lpVtbl->Release(request);
+  return S_OK;
+}
 
 static HRESULT STDMETHODCALLTYPE Controller_QueryInterface(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler* this, REFIID riid, void** ppvObject) {
   if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler)) {
@@ -39,6 +157,8 @@ static ULONG STDMETHODCALLTYPE Controller_Release(ICoreWebView2CreateCoreWebView
   return ref;
 }
 
+static ICoreWebView2WebResourceRequestedEventHandlerVtbl g_webResourceRequestedVtbl = {WebResourceRequested_QueryInterface, WebResourceRequested_AddRef, WebResourceRequested_Release, WebResourceRequested_Invoke};
+
 static HRESULT STDMETHODCALLTYPE Controller_Invoke(ICoreWebView2CreateCoreWebView2ControllerCompletedHandler* this, HRESULT result, ICoreWebView2Controller* controller) {
   if (controller) {
     ControllerHandler* self = (ControllerHandler*)this;
@@ -50,6 +170,19 @@ static HRESULT STDMETHODCALLTYPE Controller_Invoke(ICoreWebView2CreateCoreWebVie
     RECT bounds;
     GetClientRect(self->hwnd, &bounds);
     controller->lpVtbl->put_Bounds(controller, bounds);
+
+    self->web->webview->lpVtbl->AddWebResourceRequestedFilter(self->web->webview, L"file://app/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+
+    WebResourceRequestedHandler* resourceHandler = (WebResourceRequestedHandler*)malloc(sizeof(WebResourceRequestedHandler));
+    resourceHandler->lpVtbl = &g_webResourceRequestedVtbl;
+    resourceHandler->refCount = 1;
+    resourceHandler->hwnd = self->hwnd;
+    resourceHandler->web = self->web;
+    resourceHandler->env = self->web->env;
+    resourceHandler->env->lpVtbl->AddRef(resourceHandler->env);
+
+    EventRegistrationToken token;
+    self->web->webview->lpVtbl->add_WebResourceRequested(self->web->webview, (ICoreWebView2WebResourceRequestedEventHandler*)resourceHandler, &token);
 
     PostMessage(self->hwnd, WM_WEBVIEW2_READY, 0, 0);
   }
@@ -86,6 +219,9 @@ static ULONG STDMETHODCALLTYPE Env_Release(ICoreWebView2CreateCoreWebView2Enviro
 static HRESULT STDMETHODCALLTYPE Env_Invoke(ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler* this, HRESULT result, ICoreWebView2Environment* env) {
   if (env) {
     EnvironmentHandler* self = (EnvironmentHandler*)this;
+
+    self->web->env = env;
+    env->lpVtbl->AddRef(env);
 
     ControllerHandler* controllerHandler = (ControllerHandler*)malloc(sizeof(ControllerHandler));
     controllerHandler->lpVtbl = &g_controller_vtbl;
